@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>Tim Don't PK Sheep</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+    :root {
+      --panel: #12121a;
+      --border: #2a2a3a;
+      --accent: #ff4444;
+      --btn-move: rgba(20, 20, 46, 0.6);
+      --btn-move-active: rgba(60, 60, 130, 0.82);
+      --btn-hand-active: rgba(200, 40, 40, 0.88);
+      --btn-foot-active: rgba(200, 100, 0, 0.88);
+      --text: rgba(220, 220, 240, 0.88);
+      --glow: rgba(255,68,68,0.3);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0;
+        -webkit-tap-highlight-color: transparent; user-select: none; }
+
+    html, body { width: 100%; height: 100%; background: #000; overflow: hidden;
+                 font-family: 'Press Start 2P', monospace; }
+
+    /* ── Splash screen ── */
+    #splash {
+      position: fixed; inset: 0; z-index: 2000;
+      background: #000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 32px;
+    }
+
+    #splash-title {
+      font-size: clamp(10px, 3vw, 18px);
+      color: var(--accent);
+      text-shadow: 0 0 20px var(--glow), 0 0 40px var(--glow);
+      text-align: center; line-height: 2.2; letter-spacing: 2px;
+      opacity: 0;
+      animation: title-fade-in 1s ease 0.3s forwards;
+    }
+    @keyframes title-fade-in {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #progress-wrap {
+      width: min(280px, 70vw);
+      display: flex; flex-direction: column; gap: 10px; align-items: center;
+    }
+    #progress-bar-bg {
+      width: 100%; height: 6px;
+      background: #1a1a2a; border: 1px solid #2a2a4a; border-radius: 3px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%; width: 0%;
+      background: linear-gradient(90deg, #331111, var(--accent));
+      border-radius: 3px;
+      transition: width 0.1s linear;
+      box-shadow: 0 0 8px var(--glow);
+    }
+    #progress-label {
+      font-size: 7px; color: #445; letter-spacing: 1px;
+    }
+
+    #start-btn {
+      display: none;
+      padding: 14px 28px;
+      background: transparent;
+      border: 1px solid var(--accent);
+      border-radius: 4px;
+      color: var(--accent);
+      font-family: 'Press Start 2P', monospace;
+      font-size: 10px;
+      cursor: pointer;
+      letter-spacing: 2px;
+      text-shadow: 0 0 8px var(--glow);
+      box-shadow: 0 0 12px var(--glow), inset 0 0 12px rgba(255,68,68,0.05);
+      animation: btn-pulse 1.8s ease-in-out infinite;
+      touch-action: manipulation;
+    }
+    @keyframes btn-pulse {
+      0%,100% { box-shadow: 0 0 10px var(--glow), inset 0 0 10px rgba(255,68,68,0.05); }
+      50%      { box-shadow: 0 0 22px rgba(255,68,68,0.6), inset 0 0 16px rgba(255,68,68,0.1); }
+    }
+    #start-btn:active { transform: scale(0.96); }
+
+    /* CRT power-on animation */
+    @keyframes crt-power-on {
+      0%   { transform: scaleY(0.004) scaleX(1);   opacity: 1; }
+      8%   { transform: scaleY(0.004) scaleX(1);   opacity: 1; }
+      15%  { transform: scaleY(0.012) scaleX(0.98); }
+      25%  { transform: scaleY(1)     scaleX(1);    filter: brightness(4); }
+      40%  { transform: scaleY(1)     scaleX(1);    filter: brightness(1.4); }
+      70%  { filter: brightness(1.1); }
+      100% { transform: scaleY(1)     scaleX(1);    filter: brightness(1); opacity: 0; }
+    }
+    #splash.powering-on {
+      animation: crt-power-on 0.9s cubic-bezier(0.22,1,0.36,1) forwards;
+      transform-origin: center center;
+    }
+
+    /* ── CRT effect ── */
+    @keyframes crt-flicker {
+      0%,94%,97%,100% { opacity: 1; }
+      93%  { opacity: 0.82; }
+      96%  { opacity: 0.88; }
+    }
+    @keyframes scanline-drift {
+      from { background-position: 0 0; } to { background-position: 0 8px; }
+    }
+    #crt {
+      position: fixed; inset: 0; pointer-events: none; z-index: 950;
+      background: repeating-linear-gradient(0deg,
+        transparent, transparent 3px, rgba(0,0,0,0.10) 3px, rgba(0,0,0,0.10) 4px);
+      animation: crt-flicker 6s step-end infinite, scanline-drift 0.18s linear infinite;
+      mix-blend-mode: multiply;
+      display: none;
+    }
+    #crt.active { display: block; }
+    #crt::after {
+      content: ''; position: absolute; inset: 0;
+      background: radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,0.55) 100%);
+    }
+
+    /* ── Banner ── */
+    #banner {
+      position: fixed; top: 10px; left: 10px; z-index: 300;
+      background: rgba(10,10,20,0.75);
+      border: 1px solid var(--border); border-radius: 6px;
+      padding: 5px 8px;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      pointer-events: none; opacity: 0;
+    }
+    #banner h1 {
+      font-size: 6px; color: var(--accent);
+      text-shadow: 0 0 8px var(--glow); letter-spacing: 1px; line-height: 1.5;
+    }
+
+    /* ── Game area ── */
+    #game-wrapper {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center; background: #000;
+    }
+    #game-canvas {
+      position: relative; aspect-ratio: 4/3;
+      max-width: 100%; max-height: 100%; width: auto; height: 100%; background: #000;
+    }
+    ruffle-player { width: 100%; height: 100%; display: block; }
+    #play-button { display: none !important; }
+
+    /* ── Controls ── */
+    #controls {
+      position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+      pointer-events: none; z-index: 100;
+      display: flex; align-items: flex-end; justify-content: space-between;
+      padding: 0 16px 20px;
+      opacity: 0;
+    }
+
+    #joystick-zone {
+      position: fixed;
+      top: 0; left: 0; bottom: 0;
+      width: 50%;
+      pointer-events: none; touch-action: none;
+      z-index: 99;
+      opacity: 0;
+    }
+    #joystick-zone.active {
+      pointer-events: all;
+    }
+    #joystick-base {
+      position: fixed;
+      width: 150px; height: 150px;
+      transform: translate(-50%, -50%);
+      border-radius: 50%;
+      background: rgba(20,20,46,0.5); border: 2px solid rgba(100,100,180,0.4);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      pointer-events: none;
+      display: none;
+      opacity: 0.5;
+    }
+    #joystick-knob {
+      position: fixed; width: 56px; height: 56px; border-radius: 50%;
+      background: rgba(60,60,130,0.75); border: 2px solid rgba(130,130,230,0.7);
+      transform: translate(-50%,-50%);
+      pointer-events: none;
+      display: none;
+      opacity: 0.5;
+      transition: background 0.06s;
+    }
+    #joystick-knob.active {
+      background: rgba(80,80,180,0.9); box-shadow: 0 0 14px rgba(100,100,255,0.4);
+    }
+
+
+    #attack-btns { display: flex; flex-direction: column; gap: 12px; flex-shrink: 0; pointer-events: none; }
+    .attack-btn {
+      width: 68px; height: 52px; border-radius: 12px;
+      border: 1px solid rgba(150,50,50,0.45); background: rgba(30,10,10,0.58);
+      backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+      color: var(--text); font-family: 'Press Start 2P', monospace; font-size: 7px;
+      cursor: pointer; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 4px;
+      touch-action: none; pointer-events: all;
+      transition: background 0.06s, box-shadow 0.06s, transform 0.06s;
+    }
+    .attack-btn .icon { font-size: 18px; line-height: 1; }
+    #btn-hand.pressed { background: var(--btn-hand-active); border-color: rgba(255,100,100,0.85);
+                        box-shadow: 0 0 16px rgba(255,60,60,0.55); transform: scale(0.91); color: #fff; }
+    #btn-foot.pressed { background: var(--btn-foot-active); border-color: rgba(255,160,60,0.85);
+                        box-shadow: 0 0 16px rgba(255,130,0,0.55); transform: scale(0.91); color: #fff; }
+
+
+
+
+    /* ── CRT toggle ── */
+    #crt-toggle {
+      position: fixed; top: 10px; right: 10px; z-index: 300;
+      background: rgba(10,10,20,0.75); border: 1px solid #2a2a3a; border-radius: 6px;
+      color: #556; font-family: 'Press Start 2P', monospace; font-size: 6px;
+      padding: 5px 7px; cursor: pointer; line-height: 1.6; text-align: center;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      transition: color 0.15s, border-color 0.15s; touch-action: manipulation;
+      opacity: 0;
+    }
+    #crt-toggle.on { color: #7fbb7f; border-color: #3a5a3a; text-shadow: 0 0 6px rgba(100,200,100,0.4); }
+    #crt-toggle:active { transform: scale(0.93); }
+
+    #fullscreen-btn {
+      position: fixed; top: 72px; right: 10px; z-index: 300;
+      background: rgba(10,10,20,0.75); border: 1px solid #2a2a3a; border-radius: 6px;
+      color: #556; font-family: 'Press Start 2P', monospace; font-size: 6px;
+      padding: 5px 7px; cursor: pointer; line-height: 1.6; text-align: center;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      transition: color 0.15s, border-color 0.15s; touch-action: manipulation;
+      opacity: 0;
+    }
+    #fullscreen-btn:active { transform: scale(0.93); }
+
+    /* Cheat menu */
+    #cheat-menu {
+      position: fixed; top: 40px; left: 10px; z-index: 300;
+      display: none; flex-direction: column; gap: 6px;
+      opacity: 0; transition: opacity 0.4s ease;
+    }
+    #cheat-menu.visible { display: flex; }
+    #cheat-menu.shown { opacity: 1; }
+    #cheat-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 6px; color: #ffcc00;
+      text-shadow: 0 0 8px rgba(255,200,0,0.6);
+      margin-bottom: 2px; letter-spacing: 1px;
+    }
+    .cheat-btn {
+      width: 48px; height: 44px;
+      background: rgba(10,10,20,0.85);
+      border: 1px solid #ffcc00; border-radius: 6px;
+      color: #ffcc00; font-family: 'Press Start 2P', monospace;
+      font-size: 6px; cursor: pointer; line-height: 1.4;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 2px;
+      touch-action: manipulation;
+      backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+      text-shadow: 0 0 6px rgba(255,200,0,0.4);
+      box-shadow: 0 0 8px rgba(255,200,0,0.15);
+      transition: background 0.1s, box-shadow 0.1s;
+    }
+    .cheat-btn span.icon { font-size: 14px; }
+    .cheat-btn:active {
+      background: rgba(255,200,0,0.2);
+      box-shadow: 0 0 14px rgba(255,200,0,0.5);
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      #controls { display: none; }
+      #joystick-zone { display: none; }
+      #kb-hint { display: block; }
+    }
+    #kb-hint {
+      display: none; position: fixed; bottom: 8px; left: 50%;
+      transform: translateX(-50%); font-size: 6px; color: #2a2a3a;
+      white-space: nowrap; z-index: 200; letter-spacing: 0.5px; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Splash -->
+  <div id="splash">
+    <div id="splash-title">TIM DON'T<br>PK SHEEP</div>
+    <div id="progress-wrap">
+      <div id="progress-bar-bg"><div id="progress-bar"></div></div>
+      <div id="progress-label">LOADING...</div>
+    </div>
+    <button id="start-btn">► START</button>
+  </div>
+
+  <!-- Game (hidden until start) -->
+  <div id="crt"></div>
+  <button id="crt-toggle" class="on">CRT<br>ON</button>
+  <button id="fullscreen-btn">⛶<br>FS</button>
+  <div id="banner"><h1>TIM DON'T<br>PK SHEEP</h1></div>
+
+  <!-- Cheat menu (hidden until Konami Code) -->
+  <div id="cheat-menu">
+    <div id="cheat-title">🎮 CHEAT</div>
+    <button class="cheat-btn" id="cheat-btn-1">⏭️<br><span>跳關</span></button>
+    <button class="cheat-btn" id="cheat-btn-2">❤️<br><span>HP+1</span></button>
+    <button class="cheat-btn" id="cheat-btn-3">⭐<br><span>LP+1</span></button>
+    <button class="cheat-btn" id="cheat-btn-4">👻<br><span>無敵</span></button>
+  </div>
+
+  <div id="game-wrapper">
+    <div id="game-canvas" id="game-canvas"></div>
+  </div>
+
+  <!-- Joystick: left half of screen -->
+  <div id="joystick-zone">
+    <div id="joystick-base"></div>
+    <div id="joystick-knob"></div>
+  </div>
+
+  <div id="controls">
+    <div style="width:150px;flex-shrink:0;pointer-events:none;"></div>
+    <div id="attack-btns">
+      <div class="attack-btn" id="btn-hand"><span class="icon">👊</span><span>手</span></div>
+      <div class="attack-btn" id="btn-foot"><span class="icon">🦵</span><span>腳</span></div>
+    </div>
+  </div>
+
+
+
+
+
+  <script>
+    if (!location.search.includes('openExternalBrowser=1')) {
+      const sep = location.search ? '&' : '?';
+      location.replace(location.href + sep + 'openExternalBrowser=1');
+    }
+  </script>
+  <script src="https://unpkg.com/@ruffle-rs/ruffle"></script>
+  <script>
+    // ── Ruffle: manual init (no default splash) ──
+    const ruffle = window.RufflePlayer.newest();
+    const player = ruffle.createPlayer();
+    player.style.width  = '100%';
+    player.style.height = '100%';
+    document.getElementById('game-canvas').appendChild(player);
+
+    const progressBar   = document.getElementById('progress-bar');
+    const progressLabel = document.getElementById('progress-label');
+    const startBtn      = document.getElementById('start-btn');
+    const progressWrap  = document.getElementById('progress-wrap');
+    const splash        = document.getElementById('splash');
+
+    // Simulate loading progress while Ruffle loads
+    let fakeProgress = 0;
+    const fakeTimer = setInterval(() => {
+      fakeProgress = Math.min(fakeProgress + Math.random() * 4, 90);
+      progressBar.style.width = fakeProgress + '%';
+    }, 120);
+
+    player.load({
+      url: 'TimDontPKSheep.swf',
+      splashScreen: false,
+      contextMenu: 'off',
+      unmuteOverlay: 'hidden',
+      autoplay: 'off',  // don't start until user hits START
+      allowScriptAccess: true,
+    }).then(() => {
+      clearInterval(fakeTimer);
+      progressBar.style.width = '100%';
+      progressLabel.textContent = 'READY';
+      setTimeout(() => {
+        progressWrap.style.display = 'none';
+        startBtn.style.display = 'block';
+      }, 400);
+    }).catch(() => {
+      clearInterval(fakeTimer);
+      progressLabel.textContent = 'ERROR';
+    });
+
+    // ── START button → CRT power-on → enter game ──
+    function enterGame() {
+      startBtn.removeEventListener('click', enterGame);
+      startBtn.removeEventListener('touchstart', onStartTouch);
+
+      splash.classList.add('powering-on');
+
+      setTimeout(() => {
+        // Splash gone, reveal game + UI
+        splash.style.display = 'none';
+
+        // Enable CRT
+        document.getElementById('crt').classList.add('active');
+
+        // Fade in UI elements
+        const fadeEls = ['#banner','#crt-toggle','#controls','#joystick-zone','#kb-hint'];
+        fadeEls.forEach(sel => {
+          const el = document.querySelector(sel);
+          if (el) {
+            el.style.transition = 'opacity 0.6s ease';
+            el.style.opacity = '1';
+          }
+        });
+
+        // Enable joystick zone
+        document.getElementById('joystick-zone').classList.add('active');
+        // Fade in fullscreen btn too
+        document.getElementById('fullscreen-btn').style.transition = 'opacity 0.6s ease';
+        document.getElementById('fullscreen-btn').style.opacity = '1';
+
+        // Show joystick at default position
+        const defaultX = window.innerWidth * 0.18;
+        const defaultY = window.innerHeight * 0.75;
+        joystickDefaultX = defaultX;
+        joystickDefaultY = defaultY;
+        joystickBase.style.display = 'block';
+        joystickBase.style.left = defaultX + 'px';
+        joystickBase.style.top  = defaultY + 'px';
+        knob.style.display = 'block';
+        knob.style.left = defaultX + 'px';
+        knob.style.top  = defaultY + 'px';
+        joystickOriginX = defaultX;
+        joystickOriginY = defaultY;
+
+        // Start the SWF
+        player.play();
+        setTimeout(() => player.focus(), 100);
+      }, 880); // match animation duration
+    }
+
+    function onStartTouch(e) {
+      e.preventDefault();
+      enterGame();
+    }
+
+    startBtn.addEventListener('click', enterGame);
+    startBtn.addEventListener('touchstart', onStartTouch, { passive: false });
+
+    // ── Key / input setup ──
+    const KEYS = {
+      up:    [{ key:'w', code:'KeyW', keyCode:87 }, { key:'ArrowUp',    code:'ArrowUp',    keyCode:38 }],
+      down:  [{ key:'s', code:'KeyS', keyCode:83 }, { key:'ArrowDown',  code:'ArrowDown',  keyCode:40 }],
+      left:  [{ key:'a', code:'KeyA', keyCode:65 }, { key:'ArrowLeft',  code:'ArrowLeft',  keyCode:37 }],
+      right: [{ key:'d', code:'KeyD', keyCode:68 }, { key:'ArrowRight', code:'ArrowRight', keyCode:39 }],
+      hand:  [{ key:'k', code:'KeyK', keyCode:75 }, { key:'Enter',      code:'Enter',      keyCode:13 }],
+      foot:  [{ key:'l', code:'KeyL', keyCode:76 }, { key:'Enter',      code:'Enter',      keyCode:13 }],
+    };
+
+    function getPlayer() { return player; }
+
+    function refocus() {
+      if (document.activeElement !== player) player.focus({ preventScroll: true });
+    }
+
+    function fireKey(type, k) {
+      const opts = { key:k.key, code:k.code, keyCode:k.keyCode, which:k.keyCode, bubbles:true, cancelable:true };
+      player.dispatchEvent(new KeyboardEvent(type, opts));
+      document.dispatchEvent(new KeyboardEvent(type, opts));
+      window.dispatchEvent(new KeyboardEvent(type, opts));
+    }
+
+    const heldKeys = new Set();
+    function pressKey(name) {
+      if (heldKeys.has(name)) return;
+      heldKeys.add(name);
+      (KEYS[name] || []).forEach(k => fireKey('keydown', k));
+    }
+    function releaseKey(name) {
+      if (!heldKeys.has(name)) return;
+      heldKeys.delete(name);
+      (KEYS[name] || []).forEach(k => fireKey('keyup', k));
+    }
+    function fullReset() {
+      [...heldKeys].forEach(releaseKey);
+      ['hand','foot'].forEach(n => document.getElementById('btn-'+n)?.classList.remove('pressed'));
+      joystickReset();
+    }
+
+    // ── Special move gesture tracking (declare before setDirections) ──
+    let lastHDir = null;
+    let prevHDir = null;
+
+    function onHDirChange(newDir) {
+      if (newDir === lastHDir) return;
+      prevHDir = lastHDir;
+      lastHDir = newDir;
+    }
+
+    let specialFiring = false;
+
+    // ── Attack buttons ──
+    ['hand','foot'].forEach(name => {
+      const el = document.getElementById('btn-' + name);
+      if (!el) return;
+      el.addEventListener('touchstart', e => {
+        e.preventDefault(); e.stopPropagation();
+        el.classList.add('pressed');
+        const hasReversal = prevHDir && lastHDir && prevHDir !== lastHDir;
+        if (hasReversal) {
+          const enter3 = prevHDir === 'left' ? 65 : 68;
+          const enter2 = lastHDir === 'left' ? 65 : 68;
+          prevHDir = null; lastHDir = null;
+          specialFiring = true;
+          try { player.ruffle().callExternalInterface("setEnter", enter2, enter2, enter3); } catch(err) {}
+          refocus();
+          konamiMobileInput(name);
+          requestAnimationFrame(() => {
+            pressKey(name);
+            setTimeout(() => {
+              releaseKey(name);
+              el.classList.remove('pressed');
+              specialFiring = false;
+            }, 300);
+          });
+        } else {
+          refocus();
+          pressKey(name);
+          konamiMobileInput(name);
+        }
+      }, { passive:false });
+      el.addEventListener('touchend',   e => { e.preventDefault(); e.stopPropagation(); if (!specialFiring) { el.classList.remove('pressed'); releaseKey(name); } }, { passive:false });
+      el.addEventListener('touchcancel',e => { e.preventDefault(); e.stopPropagation(); if (!specialFiring) { el.classList.remove('pressed'); releaseKey(name); } }, { passive:false });
+      el.addEventListener('mousedown',  () => { el.classList.add('pressed');    pressKey(name); });
+      el.addEventListener('mouseup',    () => { el.classList.remove('pressed'); releaseKey(name); });
+      el.addEventListener('mouseleave', () => { el.classList.remove('pressed'); releaseKey(name); });
+    });
+
+    // ── Joystick ──
+    const zone = document.getElementById('joystick-zone');
+    const knob = document.getElementById('joystick-knob');
+    const joystickBase = document.getElementById('joystick-base');
+    const RADIUS=75, DEAD_ZONE=0.20, H_THRESH=0.45, V_THRESH=0.57;
+    let joystickTouchId=null, activeDirections=new Set();
+
+    function setDirections(dirs) {
+      for (const d of activeDirections) { if (!dirs.has(d)) releaseKey(d); }
+      for (const d of dirs)             { if (!activeDirections.has(d)) { pressKey(d); konamiMobileInput(d); } }
+      activeDirections = new Set(dirs);
+      const hasLeft  = dirs.has('left');
+      const hasRight = dirs.has('right');
+      if (hasLeft && !hasRight)      onHDirChange('left');
+      else if (hasRight && !hasLeft) onHDirChange('right');
+    }
+
+    let joystickOriginX = 0, joystickOriginY = 0;
+
+    function joystickMove(tx, ty) {
+      const dx=tx-joystickOriginX, dy=ty-joystickOriginY;
+      const dist=Math.sqrt(dx*dx+dy*dy), norm=Math.min(dist/RADIUS,1);
+      const clamp=Math.min(dist,RADIUS-6), angle=Math.atan2(dy,dx);
+      joystickBase.style.left = joystickOriginX + 'px';
+      joystickBase.style.top  = joystickOriginY + 'px';
+      knob.style.left = (joystickOriginX + Math.cos(angle)*clamp) + 'px';
+      knob.style.top  = (joystickOriginY + Math.sin(angle)*clamp) + 'px';
+      knob.classList.toggle('active', norm>DEAD_ZONE);
+      if (norm<DEAD_ZONE) { setDirections(new Set()); return; }
+      const nx=dx/dist, ny=dy/dist, dirs=new Set();
+      if (nx> H_THRESH) dirs.add('right');
+      if (nx<-H_THRESH) dirs.add('left');
+      if (ny> V_THRESH) dirs.add('down');
+      if (ny<-V_THRESH) dirs.add('up');
+      setDirections(dirs);
+    }
+    let joystickDefaultX = 0, joystickDefaultY = 0;
+
+    function joystickReset() {
+      knob.classList.remove('active');
+      setDirections(new Set());
+      joystickTouchId = null;
+      joystickBase.style.display = 'block';
+      joystickBase.style.left = joystickDefaultX + 'px';
+      joystickBase.style.top  = joystickDefaultY + 'px';
+      knob.style.display = 'block';
+      knob.style.left = joystickDefaultX + 'px';
+      knob.style.top  = joystickDefaultY + 'px';
+    }
+    zone.addEventListener('touchstart', e => {
+      e.preventDefault(); e.stopPropagation(); refocus();
+      if (joystickTouchId !== null) return;
+      const t = e.changedTouches[0];
+      joystickTouchId = t.identifier;
+      joystickOriginX = t.clientX;
+      joystickOriginY = t.clientY;
+      joystickBase.style.display = 'block';
+      knob.style.display = 'block';
+      joystickMove(t.clientX, t.clientY);
+    }, {passive:false});
+    zone.addEventListener('touchmove', e => {
+      e.preventDefault(); e.stopPropagation();
+      for (const t of e.changedTouches)
+        if (t.identifier === joystickTouchId) joystickMove(t.clientX, t.clientY);
+    }, {passive:false});
+    zone.addEventListener('touchend',   e => { e.preventDefault(); e.stopPropagation(); for(const t of e.changedTouches) if(t.identifier===joystickTouchId) joystickReset(); }, {passive:false});
+    zone.addEventListener('touchcancel',e => { e.preventDefault(); e.stopPropagation(); joystickReset(); }, {passive:false});
+
+    // Catch joystick finger release anywhere on screen
+    document.addEventListener('touchend', e => {
+      for (const t of e.changedTouches)
+        if (t.identifier === joystickTouchId) joystickReset();
+    }, { passive: true });
+    document.addEventListener('touchcancel', e => {
+      for (const t of e.changedTouches)
+        if (t.identifier === joystickTouchId) joystickReset();
+    }, { passive: true });
+
+    document.addEventListener('visibilitychange', () => { if(document.hidden) fullReset(); });
+    window.addEventListener('blur', fullReset);
+    document.querySelectorAll('#crt-toggle,.attack-btn,#joystick-zone').forEach(el => {
+      el.addEventListener('mousedown', e => e.preventDefault());
+    });
+
+    // CRT toggle
+    const crtLayer=document.getElementById('crt'), crtBtn=document.getElementById('crt-toggle');
+    let crtOn=true;
+    crtBtn.addEventListener('click', () => {
+      crtOn=!crtOn;
+      crtLayer.style.display = crtOn ? '' : 'none';
+      crtBtn.innerHTML=`CRT<br>${crtOn?'ON':'OFF'}`;
+      crtBtn.classList.toggle('on',crtOn);
+    });
+    crtBtn.addEventListener('touchstart', e => e.stopPropagation(), {passive:true});
+
+    // ── Konami Code ──
+    // Keyboard: ↑↑↓↓←→←→BA
+    // Mobile: ↑↑↓↓←→←→腳手 (via joystick + attack buttons)
+    const KONAMI_KB = ['ArrowUp','ArrowUp','ArrowDown','ArrowDown','ArrowLeft','ArrowRight','ArrowLeft','ArrowRight','b','a'];
+    const KONAMI_MOBILE = ['up','up','down','down','left','right','left','right','foot','hand'];
+    let konamiKbPos = 0;
+    let konamiMobilePos = 0;
+    let konamiActive = false;
+
+    function showCheatMenu() {
+      if (konamiActive) return;
+      konamiActive = true;
+      const menu = document.getElementById('cheat-menu');
+      menu.classList.add('visible');
+      requestAnimationFrame(() => menu.classList.add('shown'));
+    }
+
+    // Keyboard detection
+    document.addEventListener('keydown', e => {
+      if (e.key === KONAMI_KB[konamiKbPos]) {
+        konamiKbPos++;
+        if (konamiKbPos === KONAMI_KB.length) {
+          konamiKbPos = 0;
+          showCheatMenu();
+        }
+      } else {
+        konamiKbPos = e.key === KONAMI_KB[0] ? 1 : 0;
+      }
+    });
+
+    // Mobile detection: hook into joystick direction changes and attack buttons
+    function konamiMobileInput(input) {
+      if (konamiActive) return;
+      if (input === KONAMI_MOBILE[konamiMobilePos]) {
+        konamiMobilePos++;
+        if (konamiMobilePos === KONAMI_MOBILE.length) {
+          konamiMobilePos = 0;
+          showCheatMenu();
+        }
+      } else {
+        konamiMobilePos = input === KONAMI_MOBILE[0] ? 1 : 0;
+      }
+    }
+
+    // Cheat buttons
+    const cheatDefs = [
+      { id: 'cheat-btn-1', api: 'cheat1' },
+      { id: 'cheat-btn-2', api: 'cheat2' },
+      { id: 'cheat-btn-3', api: 'cheat3' },
+      { id: 'cheat-btn-4', api: 'cheat4' },
+    ];
+    cheatDefs.forEach(({ id, api }) => {
+      const btn = document.getElementById(id);
+      if (!btn) return;
+      const fire = () => {
+        try { player.ruffle().callExternalInterface(api); } catch(e) {}
+        refocus();
+      };
+      btn.addEventListener('click', fire);
+      btn.addEventListener('touchstart', e => { e.preventDefault(); e.stopPropagation(); fire(); }, { passive: false });
+    });
+
+    // ── Fullscreen ──
+    const fsBtn = document.getElementById('fullscreen-btn');
+    fsBtn.addEventListener('click', () => {
+      if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(() => {});
+        fsBtn.innerHTML = '⛶<br>EXIT';
+      } else {
+        document.exitFullscreen();
+        fsBtn.innerHTML = '⛶<br>FS';
+      }
+    });
+    document.addEventListener('fullscreenchange', () => {
+      if (!document.fullscreenElement) fsBtn.innerHTML = '⛶<br>FS';
+    });
+    fsBtn.addEventListener('touchstart', e => e.stopPropagation(), {passive:true});
+  </script>
+</body>
+</html>
